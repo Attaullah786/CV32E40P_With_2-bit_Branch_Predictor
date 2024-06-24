@@ -113,7 +113,7 @@ always @(posedge clk_i or negedge rst_ni) begin
 
     // When request is removed, randomize gnt
     if (!req_core_i) begin
-      grant_core_o <= $urandom; //@DVT_LINTER_WAIVER "MT20211214_2" disable SVTB.29.1.3.1
+      grant_core_o <= $random; //@DVT_LINTER_WAIVER "MT20211214_2" disable SVTB.29.1.3.1
     end
 
     // New request coming in
