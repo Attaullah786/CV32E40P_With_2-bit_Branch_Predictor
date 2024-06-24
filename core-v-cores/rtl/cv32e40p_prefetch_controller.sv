@@ -74,7 +74,12 @@ module cv32e40p_prefetch_controller #(
     output logic fifo_flush_o,  // Flush the FIFO
     output logic                     fifo_flush_but_first_o,  // Flush the FIFO, but keep the first instruction if present
     input logic [FIFO_ADDR_DEPTH:0] fifo_cnt_i,  // Number of valid items/words in the prefetch FIFO
-    input logic fifo_empty_i  // FIFO is empty
+    input logic fifo_empty_i,  // FIFO is empty
+    // branch predictor
+    input logic branch_decision_i,
+    output logic branch_prediction_o,
+    input logic [31:0] pc_if_o,
+    output logic [31:0] branch_address_o
 );
 
   import cv32e40p_pkg::*;
@@ -159,6 +164,40 @@ module cv32e40p_prefetch_controller #(
   // Masking fifo_cnt in this case allows for making a new request when the FIFO
   // is not empty and we are jumping, and (fifo_cnt_i + cnt_q == DEPTH)
   assign fifo_cnt_masked = (branch_i || hwlp_jump_i) ? '0 : fifo_cnt_i;
+ ///////////////////////////
+  //                       //
+  //                       //
+  //    Branch Predictor   //
+  //                       //
+  //                       //
+  //                       //
+  ///////////////////////////
+
+  
+
+  
+two_bit_branch_predictor BP_i (
+  .clk (clk), 
+  .rst_n (rst_n),
+  .branch_i (branch_i),
+  // 0: Not Taken, 1: Taken
+  .branch_decision (branch_decision_i),
+  // 0: Not Taken, 1: Taken
+  .branch_prediction (branch_prediction_o),
+  .trans_addr_o (branch_address_o), 
+  .fetch_rdata_o (fetch_rdata_o),
+  .pc_if_o(pc_if_o)
+);
+
+  ///////////////////////////
+  //                       //
+  //                       //
+  //    Branch Predictor   //
+  //                       //
+  //                       //
+  //                       //
+  ///////////////////////////
+
 
   // FSM (state_q, next_state) to control OBI A channel signals.
   always_comb begin
@@ -189,7 +228,19 @@ module cv32e40p_prefetch_controller #(
         // Replay previous branch target address (trans_addr_q) or new branch address (this can
         // occur if for example an interrupt is taken right after a taken jump which did not
         // yet have its target address accepted by the bus interface adapter.
-        trans_addr_o = branch_i ? aligned_branch_addr : trans_addr_q;
+        if (branch_i) begin
+        // Jumps must have the highest priority (e.g. an interrupt must
+        // have higher priority than a HW-loop branch)
+        if (branch_prediction_o) begin 
+            trans_addr_o = branch_address_o;
+        end
+    end
+    
+        else begin
+        trans_addr_o = trans_addr_q;
+        end
+        
+          //trans_addr_o = branch_i ? aligned_branch_addr : trans_addr_q;
         if (trans_valid_o && trans_ready_i) begin
           // Transaction with branch target address has been accepted. Start regular prefetch again.
           next_state = IDLE;
